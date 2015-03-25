@@ -176,8 +176,7 @@ module.exports = {
 
 			if (ch.s.portal)
 			after(2, function() {
-				ch.do('eq');
-				ch.do('stat');
+				ch.do('eq;stat');
 			});
 			
 			if (ch.s.portal)
@@ -237,7 +236,6 @@ module.exports = {
 			ch.snd(' ' + m.zone[z.zone].grid[z.y][z.x].color('&Ki'));
 
 		ch.send(''); /* line break */
-
 		ch.sendGMCP("ch.at", ch.at);
 			
 		if (ch.moving) /* cut output short because next command is another move */
@@ -260,8 +258,8 @@ module.exports = {
 
 		for (var i = 0; i < M.length; i++) {
 			
-			if (M[i+1] && M[i+1].MobProtoId == M[i].MobProtoId) {
-				n++; /* stack mobs */
+			if (M[i+1] && M[i+1].MobProtoId == M[i].MobProtoId) { /* stack mobs with same proto id */
+				n++; 
 				continue;
 			}
 			
@@ -329,9 +327,17 @@ module.exports = {
 			return;
 
 		ch.items.sort(function(a, b) {
+			
 			if (a.location == b.location)
-				return a.name < b.name;
-			return a.location < b.location;
+				return by_name(a, b);
+			
+			if (a.location < b.location) 
+				return -1;
+			
+			if (a.location > b.location) 
+				return 1;
+			
+			return 0;
 		})
 		.forEach(function(it, i) {
 
@@ -459,6 +465,14 @@ module.exports = {
 					+ 'Class: '.color('&K') + vict.class + ' '
 					+ 'Trade: '.color('&K') + vict.trade + ' \r\n';
 			
+			if (ch != vict) { /* not self-stat */
+				ch.snd(msg).emit('proc.stat', vict); /* we can't chain on emit method. to do: shim it so we can */
+				ch.emit('proc.aff', vict);
+				ch.emit('post.stat', vict);
+				ch.snd('</DEST>'.mxp());
+				return;
+			}
+			
 			msg += '&KHealth: &R' + vict.stat('hit') + '&n/&r' + vict.stat('maxhit')
 					+'&n &KMana:&n &B' + vict.stat('mana') + '&n/&b' + vict.stat('maxmana')
 					+'&n &KStamina:&n &G' + vict.stat('stamina') + '&n/&g' + vict.stat('maxstamina') + '&n\r\n';
@@ -466,7 +480,7 @@ module.exports = {
 			msg += my().U_SHIELD.color('&M') + ' ' + vict.stat('armor') + ' ' + my().U_SWORDS.color('&R') + ' ' + vict.stat('damage') + ' ';
 			msg += my().U_COINS.color('&220') + ' ' + vict.getGold().comma() + ' ';
 			
-			ch.snd(msg).emit('proc.stat', vict); /* other plugins can listen to proc.stat and append any extra info, e. g. char.class will add exp */
+			ch.snd(msg).emit('proc.stat', vict); /* other plugins can listen to proc.stat and append any extra info, e. g. char.class will add info on exp */
 			
 			msg = '';
 			for (var i in ch.attr.aff) {
@@ -490,10 +504,11 @@ module.exports = {
 		if (!vict)
 			vict = ch.findActor(arg.join(' '), 'at-vis');
 
-		if (!vict && ch.imp())
+		if (!vict)
 			vict = ch.findActor(arg[0], 'world');
 		
-		_stat(ch, vict);
+		if (vict)
+			_stat(ch, vict);
 	},
 
 	identify: function(arg, mode) {
@@ -586,8 +601,8 @@ module.exports = {
 			for (var i in r) {
 				var usr = m.userindex[r[i].UserId]; 
 				who
-				+= m.U_HUMAN.style(16, '&178') + ' ' + usr.name.mxpselect(['pm ' + usr.id, 'whois ' + usr.id ], ['pm ' + usr.name, 'whois ' + usr.name]) + ' '
-				+ m.U_GROUP.style(16, '&B') + ' ' + r[i].name.mxpselect(['pm ' + usr.id, 'stat ' + r[i].id], ['pm ' + r[i].name, 'stat ' + r[i].name]) + ' '
+				+= m.U_HUMAN.style(16, '&178') + ' ' + usr.name.mxpselect(['pm ' + usr.id, 'whois ' + usr.id ], ['', 'pm ' + usr.name, 'whois ' + usr.name]) + ' '
+				+ m.U_GROUP.style(16, '&B') + ' ' + r[i].name.mxpselect(['pm ' + usr.id, 'stat ' + r[i].id], ['', 'pm ' + r[i].name, 'stat ' + r[i].name]) + ' '
 				+ m.U_STAR.style(16, '&208') + ' ' + r[i].level + ' '
 				+ r[i].updatedAt.toUTCString().substring(0, 11).replace(',','').style(11, '&Ki') + ' '
 				+ '\r\n';

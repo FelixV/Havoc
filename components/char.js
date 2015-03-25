@@ -117,9 +117,11 @@ module.exports = {
 		var a = char.getActors();
 
 		for (var i in a) {
+			
 			char.initChar(a[i], 1);
+			
 			if (a[i].pc())
-				info('updated '+a[i].name);
+				debug('updated '+a[i].name);
 		}
 	},
 
@@ -188,7 +190,7 @@ module.exports = {
 
 		debug('char.initPlugins');
 		
-		var plugins = fs.readdirSync('./plugins').filter(function(i) { return i.match(/^char\..+\.js/i); });
+		var plugins = fs.readdirSync('./plugins').filter(function(i) { return i.match(/^char\..+\.js$/i); });
 		info('char component detected plugins: ' + plugins.join(', '));
 		
 		for (var i in plugins) {
@@ -220,7 +222,8 @@ module.exports = {
 	
 	initMobInstances: function() {
 		
-		Mob.sync().then(function() {
+		Mob.sync()
+		.then(function() {
 			if (Item)
 				return Mob.findAll({
 					include: [{ model: Item, as: 'items', order: "location" }]
@@ -328,17 +331,23 @@ module.exports = {
 		Char.findAll({
 			where: { UserId: ch.s.user.id }
 		})
-		.success(function(r) {
+		.then(function(r) {
 			ch.s.user.chars = r;
 		});
 	},
 	
-	initChar: function(ch) {
-		
-		point(ch, char.instanceMethods);
+	initChar: function(ch, re) {
 
-		/* turn all ch instances into event emitters */
-		ch.__proto__.__proto__.__proto__ = events.EventEmitter.prototype;
+		if (!re) {
+			/* turn all ch instances into event emitters */
+			ch.__proto__.__proto__.__proto__ = events.EventEmitter.prototype;
+	
+			/* shim the default event emit method so we can chain it */
+			ch._emit = ch.emit;
+		}
+		
+		/* assign instance methods */
+		point(ch, char.instanceMethods);
 
 		/* init all regen and pulse timers */ 
 		char.initTimers(ch);
@@ -348,11 +357,7 @@ module.exports = {
 		
 		/* first emit enter to initialize basic/common character properties */
 		char.emit('enter', ch);
-		
-		if (ch.pc())
-			char.emit('enter.pc', ch);
-		else
-			char.emit('enter.npc', ch);
+		char.emit(ch.pc() ? 'enter.pc' : 'enter.npc', ch);
 	},
 	
 	initTimers: function(ch) {
@@ -475,6 +480,10 @@ module.exports = {
 		});
 	},
 	
+	destroy: function() {
+		this.destroyMob.apply(this, arguments);
+	},
+	
 	/* resets certain properties of a mob instance to the values of their prototype, useful during rapid content creation cycles */
 
 	resetMob: function(ch) {
@@ -578,5 +587,11 @@ module.exports = {
 		return char_struct;
 	},
 	
-	instanceMethods: {}
+	instanceMethods: {
+		
+		emit: function() {
+			this._emit.apply(this, arguments);
+			return this;
+		}
+	}
 };

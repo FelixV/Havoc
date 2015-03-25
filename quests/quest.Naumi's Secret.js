@@ -6,7 +6,7 @@ addStrings({
 		
 		X_QUEST_REFUSAL: "%s wishes you would keep out of %s affairs.",
 		
-		Q1_DESC: 'If you press this subject, you will find out more about Naumi\'s secret identity. Possibly the kind of information that dislodges one\'s head from one\'s shoulders.',
+		Q1_DESC: 'If you press this subject, you will find out more about Naumi\'s secret identity. Possibly the kind of knowledge that dislodges one\'s head from one\'s shoulders.',
 		
 		Q1_ALREADY_HELPING: "You're already helping me on this matter. Right?",
 		
@@ -217,8 +217,9 @@ module.exports = {
 		/* first entry to Apothecary, ambush */
 		if (vict.hasQuest(1, 'stage 1')) {
 
-			vict.alterItem('a cinder sigil', { name: 'a glowing cinder sigil' });
-			vict.send(my().Q1_SIGIL_GLOW);
+			vict
+			.alterItem('a cinder sigil', { name: 'a glowing cinder sigil' })
+			.send(my().Q1_SIGIL_GLOW);
 
 			quest.createMob(vict, 'Serip', vict.at, quest[1], function(mob) {
 				quest.say(mob, vict, my().Q1_SEIZE_THE_TRAITOR, quest[1]);

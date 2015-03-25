@@ -19,10 +19,12 @@ log = function(msg, s) {
 };
 
 info = function(msg, s) {
+	if (config.server.loglevel == 'high')
 	return log(msg.color('&K'), s); 
 };
 
 debug = function(msg, s) {
+	if (['medium', 'high'].has(config.server.loglevel))
 	return log(msg.color('&g'), s); 
 };
 
@@ -31,6 +33,7 @@ error = function(msg, s) {
 };
 
 warning = function(msg, s) {
+	if (config.server.loglevel == 'high')
 	return log('warning: '.color('&y') + msg, s); 
 };
 
@@ -102,8 +105,11 @@ merge = function(a, b) {
 		a[i] = b[i];
 };
 
-by_name = function(a, b) { return a.name > b.name; };
-
+by_name = function(a, b) {     
+	if (a.name < b.name) return -1;
+	if (a.name > b.name) return 1;
+	return 0; 
+};
 
 addStrings = function(o) {
 	for (var lang in o) {
@@ -169,7 +175,7 @@ define(Array, "add", function(a) {
 	if (!this.has(a))
 		this.push(a);
 	else 
-		error('util.add detected duplicate!');
+		warning('util.add detected duplicate!');
 	return this;
 });
 
@@ -243,14 +249,12 @@ define(events.EventEmitter, 'register', function(id, event, callback) {
 define(events.EventEmitter, 'unregister', function(id, event, callback) {
 
 	if (!this._registered)
-		return 0;
+		return this;
 	
-	if (this._registered[id + '.' + event]) {
+	if (this._registered[id + '.' + event])
 		this.removeListener(event, this._registered[id + '.' + event]);
-		return 1;
-	}
 
-	return 0;
+	return this;
 });
 
 String.prototype.pronoun = function(ch, vict) {

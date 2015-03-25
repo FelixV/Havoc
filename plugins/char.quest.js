@@ -43,15 +43,17 @@ module.exports = {
         var res = null;
         
 		this.quests.some(function(q) { 
-			if (status && q.CharQuest.status == status && q.name == name) {
+			
+			if (status && q.name == name && q.CharQuest.status == status) {
 			    res = q.CharQuest;
 			    return true;
 			}
-			else
-			if (q.name == name) {
+			
+			if (!status && q.name == name) {
 			    res = q.CharQuest;
 			    return true;
 			}
+			
 			return false;
 		});
 		
@@ -100,7 +102,7 @@ module.exports = {
 	
 	destroyItem: function(name) {
 		
-		var ch = this, it = ch.findItem(name+'', 'has');
+		var ch = this, it = ch.findItem(name + '', 'has');
 		
 		if (!it)
 			return warning('char.quest destroyItem: '  + name + ' failed ');
@@ -108,12 +110,14 @@ module.exports = {
 		item.destroy(it, function() {
 			info('char.quest destroyItem: '  + name + ' success ');
 			ch.do('inv');
-		});	
+		});
+		
+		return this;
 	},
 
 	alterItem: function(name, o) {
 	
-		var ch = this, it = ch.findItem(name, 'hasat');
+		var ch = this, it = ch.findItem(name, 'has-at');
 		
 		if (!it)
 			return warning('char.quest alterItem: '  + name + ' failed ');
@@ -122,5 +126,7 @@ module.exports = {
 			log('char.quest alterItem success');
 			ch.do('inv');
 		});
+		
+		return this;
 	}
 };

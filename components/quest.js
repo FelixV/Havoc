@@ -255,6 +255,12 @@ module.exports = {
 			ch.unregister('quest', 'proc.talk');
 			ch.unsetAttr('talk');
 		}
+		
+		if (ch.attr.quest) /* ephemeral quest npc instances get destroyed on death */
+			ch.register('quest', 'die', function(ch) {
+				log('destroying quest NPC: ' + ch.name);
+				char.destroyMob(ch, function() {});
+			});
 	},
 	
 	initQuestPC: function(ch) {
@@ -534,15 +540,15 @@ module.exports = {
 				quest: q.id,
 				CharId: ch.id
 			});
-		
-			it
-			.updateAttributes({ at: clone(at) })
-			.success(function() {
-				my().items.add(it);
-				item.toGround(it);
-			});
 			
-			!cb || cb(it);
+			it.updateAttributes({
+				at: at,
+				location: 'ground'
+			})
+			.then(function() {
+				item.initItem(it);
+				!cb || cb(it);
+			});
 		});	
 		
 		return this;
@@ -557,8 +563,9 @@ module.exports = {
 		
 		var o = mob.values;
 		o.MobProtoId = o.id, delete o.id;
+		o.at = at;
 		
-		Mob.create(o).success(function(mob) {
+		Mob.create(o).then(function(mob) {
 
 			char.initChar(mob);
 						
@@ -566,11 +573,6 @@ module.exports = {
 			mob.setAttr({
 				quest: q.id,
 				CharId: ch.id
-			});
-			
-			/* this is the method of sequelize, different from setAttr */
-			mob.setAttributes({ 
-				at: at
 			});
 			
 			!cb || cb(mob);
@@ -670,7 +672,8 @@ module.exports = {
 	    	if (penalty == 'skip') {
 	    		ch_q.updateAttributes({
 	    			attr: { step: ++step }
-	    		}).success(function() {
+	    		})
+	    		.then(function() {
 	    			quest.quiz(ch, quiz, q);
 	    		});
 	    		return my().HANDLED;
@@ -679,7 +682,8 @@ module.exports = {
 			if (penalty == 'fail') {
 	    		ch_q.updateAttributes({
 	    			status: 'failed'
-	    		}).success(function() {
+	    		})
+	    		.then(function() {
 	    			quest.quiz(ch, quiz, q);
 	    		});
 	    		return my().HANDLED;
@@ -708,7 +712,8 @@ module.exports = {
 			ch_q.updateAttributes({
 				attr: { step: ++step },
 				status: 'completed' /* note that we keep track of the step they reached. if more steps are added later, players would be able to continue */
-			}).success(function() {
+			})
+			.then(function() {
 				ch.send(my().QUEST_QUIZ_COMPLETED);
 			});
 					
@@ -717,7 +722,8 @@ module.exports = {
 			
 		ch_q.updateAttributes({
 			attr: { step: ++step }
-		}).success(function() {
+		})
+		.then(function() {
 			quest.quiz(ch, quiz, q);
 		});
 
@@ -734,6 +740,22 @@ module.exports = {
 	quizStop: function(ch) {
 		ch.send(my().QUEST_QUIZ_STOP);
 		delete ch.temp.quiz, delete ch.temp.quest;	
+	},
+	
+	purgePropsAt: function(ch, qid) {
+		
+		var M = ch.getMobsAt();
+		
+		for (var i in M)
+			if (M[i].attr.quest && M[i].attr.CharId && M[i].attr.CharId == ch.id)
+				char.destroy(M[i]);
+		
+		var I = ch.getItemsAt();
+		
+		for (var i in I)
+			if (I[i].attr.quest && I[i].attr.CharId && I[i].attr.CharId == ch.id)
+				item.destroy(I[i]);
+		
 	},
 	
 	create: function(o, cb) { /* create a quest summary record in Quests table from a quest plugin / file */
@@ -762,10 +784,8 @@ module.exports = {
 			if (!cq)
 				return warning('no active quest found on requested status update: ' + ch.name + ' ' + q.name);
 
-			cq.updateAttributes(o).success(function() {
-				ch.getQuests().success(function(qs) {
-					for (var i in qs)
-						qs[i].CharQuest.attr = eval('('+qs[i].CharQuest.attr+')');
+			cq.updateAttributes(o).then(function() {
+				ch.getQuests().then(function(qs) {
 					ch.quests = qs;
 				});
 			});
@@ -776,9 +796,7 @@ module.exports = {
 	
 	showCharQuests: function(ch) {
 
-		ch
-		.getQuests()
-		.then(function(cq) {
+		ch.getQuests().then(function(cq) {
 
 			if (!cq.length)
 				return ch.send(my().NO_ACTIVE_QUESTS);
@@ -795,8 +813,7 @@ module.exports = {
 
 	listAllQuests: function(ch) {
 		
-		Quest
-		.findAll({ where: { status: 'enabled'} })
+		Quest.findAll({ where: { status: 'enabled'} })
 		.then(function(cq) {
 			cq.forEach(function(q) {
 				ch.send(

@@ -90,7 +90,7 @@ module.exports = {
 
 		char.register('item', 'enter', function(ch) {
 			
-			ch.getItems().success(function(items) {
+			ch.getItems().then(function(items) {
 			
 				ch.items = items;
 				
@@ -185,8 +185,8 @@ module.exports = {
 	
 	initPlugins: function() {
 
-		var plugins = fs.readdirSync('./plugins').filter(function(i) { return i.match(/^item\..+\.js/i); });
-		log('item.initPlugins detected: ' + plugins.join(', '));
+		var plugins = fs.readdirSync('./plugins').filter(function(i) { return i.match(/^item\..+\.js$/i); });
+		info('item.initPlugins detected: ' + plugins.join(', '));
 		
 		for (var i in plugins) {
 	
@@ -200,7 +200,7 @@ module.exports = {
 			if (item[pg].init)
 				item[pg].init(re), delete item[pg].init;	
 			
-			log('loaded: '+f.color('&155') + ' '+ Object.keys(item[pg]).join(', ').font('size=11'));
+			info('loaded: '+f.color('&155') + ' '+ Object.keys(item[pg]).join(', ').font('size=11'));
 		}
 	},
 	
@@ -209,7 +209,7 @@ module.exports = {
 		if (comp != item)
 			return;
 		
-		log('item.reloadPlugin');
+		debug('item.reloadPlugin');
 		item.initPlugins(1);
 	},
 	
@@ -230,12 +230,20 @@ module.exports = {
 		}
 	}, 
 
-	initItem: function(it) {
+	initItem: function(it, re) {
 
-		/* turn all item instances into event emitters */
-		it.__proto__.__proto__.__proto__ = events.EventEmitter.prototype;
+		if (!re) {
+			/* turn all item instances into event emitters */
+			it.__proto__.__proto__.__proto__ = events.EventEmitter.prototype;
+			
+			/* shim the default event emit method so we can chain it */
+			it._emit = it.emit;
+		}
+		
 		/* give them the basic instance methods of items */
 		point(it, item.instanceMethods);
+
+		my().items.add(it);
 		
 		if (it.location == 'ground') {
 			if (!world.getItems(it.at).has(it))
@@ -251,7 +259,7 @@ module.exports = {
 	
 	updateProcs: function() {
 
-		log('item.updateProcs: re-init procs on existing online items');
+		info('item.updateProcs: re-init procs on existing online items');
 
 		var a = my().items;
 
@@ -259,9 +267,9 @@ module.exports = {
 			item.initProcs(a[i]);
 	},
 	
-	createItem: function(o, cb) { /* create an instance of an item from an object of values */
+	createItem: function(o, cb) { /* create an instance of a prototyped item from a name string, proto id number, or an object of values */
 		
-		log('item.createItem');
+		debug('item.createItem');
 		
 		if (!cb)
 			warning('item.create called with no callback!');
@@ -272,32 +280,35 @@ module.exports = {
 		if (typeof o == 'number' || o.isnum())
 			o = my().itemproto[o];
 
-		o = o?clone(o.values):null;
+		o = o ? clone(o.values) : null;
 		
 		if (!o)
 			return error('item.createItem could not locate proto for: ' + stringify(o));	
 
-		o.ItemProtoId = o.id, delete o.id;
+		o.ItemProtoId = o.id, delete o.id, delete o.createdAt, delete o.updatedAt;
 		
-		Item.create(o).success(function (it) { 
-			my().items.add(it);
+		Item.create(o).then(function (it) { 
 			item.initItem(it);
 			!cb || cb(it); 
 		});
 	},
 
-	create: function() {
+	create: function() { /* forward to createItem */
 		this.createItem.apply(this, arguments);
 	},
 	
 	destroyItem: function(it, cb) {
-		my().items.remove(ch);
-		it.destroy().success(function() {
+		
+		debug('item.destroyItem');
+		
+		my().items.remove(it);
+		
+		it.destroy().then(function() {
 			!cb || cb();
 		});
 	},
 	
-	destroy: function() {
+	destroy: function() { /* forward to destroyItem */
 		this.destroyItem.apply(this, arguments);
 	},
 	
@@ -367,16 +378,19 @@ module.exports = {
 	},
 	
 	protoByName: function(a) {
+		
 		var ip = my().itemproto;
+		
 		for (var i in ip)
 			if (ip[i].name.toLowerCase() == a.toLowerCase())
 				return ip[i];
+		
 		return null;
 	},
 
 	protoIdByName: function(a) {
 		var ip = item.protoByName(a);
-		return ip?ip.id:null;
+		return ip ? ip.id : null;
 	},
 	
 	/* these methods will be attached to every item instance */
@@ -396,6 +410,11 @@ module.exports = {
 			var it = this, attr = it.attr;
 			delete attr[a];
 			it.updateAttributes({ attr: attr }, ['attr'], function() { !cb || cb(it) });
+		},
+		
+		emit: function() {
+			this._emit.apply(this, arguments);
+			return this;
 		}
 	}
 };
